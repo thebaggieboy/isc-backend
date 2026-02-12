@@ -1,0 +1,125 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  phone         String?  @unique
+  fullName      String   @map("full_name")
+  passwordHash  String   @map("password_hash")
+  balance       Decimal  @default(0) @db.Decimal(15, 2)
+  totalLocked   Decimal  @default(0) @map("total_locked") @db.Decimal(15, 2)
+  
+  isVerified    Boolean  @default(false) @map("is_verified")
+  kycStatus     String   @default("pending") @map("kyc_status")
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  lastLogin     DateTime? @map("last_login")
+  
+  // Relations
+  lockPeriods   LockPeriod[]
+  transactions  Transaction[]
+  schedules     Schedule[]
+  impulseStats  ImpulseStats[]
+  
+  @@map("users")
+  @@index([email])
+  @@index([phone])
+}
+
+model LockPeriod {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  amount          Decimal   @db.Decimal(15, 2)
+  lockDate        DateTime  @map("lock_date")
+  unlockDate      DateTime  @map("unlock_date")
+  actualUnlockDate DateTime? @map("actual_unlock_date")
+  intervalDays    Int       @map("interval_days")
+  status          String    @default("locked") // locked, pending, unlocked
+  description     String?
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("lock_periods")
+  @@index([userId])
+  @@index([status])
+  @@index([unlockDate])
+}
+
+model Transaction {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  type          String    // deposit, withdrawal, lock, unlock, fee
+  amount        Decimal   @db.Decimal(15, 2)
+  balanceBefore Decimal   @map("balance_before") @db.Decimal(15, 2)
+  balanceAfter  Decimal   @map("balance_after") @db.Decimal(15, 2)
+  status        String    @default("pending") // pending, completed, failed
+  reference     String?   @unique
+  description   String?
+  metadata      Json?
+  
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("transactions")
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Schedule {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  title         String
+  amount        Decimal   @db.Decimal(15, 2)
+  scheduledDate DateTime  @map("scheduled_date")
+  status        String    @default("pending") // pending, completed, cancelled
+  recurrence    String?   // once, daily, weekly, monthly
+  
+  createdAt     DateTime  @default(now()) @map("created_at")
+  executedAt    DateTime? @map("executed_at")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("schedules")
+  @@index([userId])
+  @@index([scheduledDate])
+}
+
+model ImpulseStats {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  month           DateTime // First day of month
+  impulsesStopped Int      @default(0) @map("impulses_stopped")
+  currentStreak   Int      @default(0) @map("current_streak")
+  longestStreak   Int      @default(0) @map("longest_streak")
+  totalSaved      Decimal  @default(0) @map("total_saved") @db.Decimal(15, 2)
+  savingsGoal     Decimal? @map("savings_goal") @db.Decimal(15, 2)
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, month])
+  @@map("impulse_stats")
+  @@index([userId])
+  @@index([month])
+}
