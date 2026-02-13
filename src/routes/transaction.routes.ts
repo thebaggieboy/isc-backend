@@ -39,7 +39,16 @@ router.post(
   '/withdraw',
   [body('amount').isFloat({ min: 1000 })],
   validate,
+  validate,
   transactionController.initiateWithdrawal
+);
+
+// Verify deposit
+router.post(
+  '/verify',
+  [body('reference').notEmpty()],
+  validate,
+  transactionController.verifyDeposit
 );
 
 export default router;

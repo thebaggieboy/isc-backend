@@ -62,8 +62,10 @@ export class AuthService {
 
     return {
       user,
-      accessToken,
-      refreshToken,
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
     };
   }
 
@@ -94,8 +96,10 @@ export class AuthService {
 
     return {
       user: userWithoutPassword,
-      accessToken,
-      refreshToken,
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
     };
   }
 
@@ -123,8 +127,10 @@ export class AuthService {
 
       return {
         user,
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
+        tokens: {
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        },
       };
     } catch (error) {
       throw new AppError('Invalid refresh token', 401);

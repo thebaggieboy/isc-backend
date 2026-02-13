@@ -1,8 +1,11 @@
 // src/controllers/schedule.controller.ts
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth';
+import { Request, Response } from 'express';
 import { ScheduleService } from '../services/schedule.service';
 import { catchAsync } from '../utils/catchAsync';
+
+interface AuthRequest extends Request {
+  userId?: string;
+}
 
 export class ScheduleController {
   private scheduleService: ScheduleService;
@@ -13,25 +16,25 @@ export class ScheduleController {
 
   createSchedule = catchAsync(async (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
-    const { title, amount, scheduledDate, recurrence } = req.body;
+    const { title, amount, payoutAmount, scheduledDate, recurrence } = req.body;
 
     const schedule = await this.scheduleService.createSchedule(userId, {
       title,
       amount,
+      payoutAmount,
       scheduledDate: new Date(scheduledDate),
       recurrence,
     });
 
     res.status(201).json({
       status: 'success',
-      message: 'Schedule created successfully',
       data: { schedule },
     });
   });
 
-  getAllSchedules = catchAsync(async (req: AuthRequest, res: Response) => {
+  getSchedules = catchAsync(async (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
-    const schedules = await this.scheduleService.getAllSchedules(userId);
+    const schedules = await this.scheduleService.getUserSchedules(userId);
 
     res.json({
       status: 'success',
@@ -39,46 +42,13 @@ export class ScheduleController {
     });
   });
 
-  getScheduleById = catchAsync(async (req: AuthRequest, res: Response) => {
+  getPayouts = catchAsync(async (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
-    const { id } = req.params;
-
-    const schedule = await this.scheduleService.getScheduleById(userId, id);
+    const payouts = await this.scheduleService.getUserPayouts(userId);
 
     res.json({
       status: 'success',
-      data: { schedule },
-    });
-  });
-
-  updateSchedule = catchAsync(async (req: AuthRequest, res: Response) => {
-    const userId = req.userId!;
-    const { id } = req.params;
-    const { title, amount, scheduledDate, recurrence } = req.body;
-
-    const schedule = await this.scheduleService.updateSchedule(userId, id, {
-      title,
-      amount,
-      scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
-      recurrence,
-    });
-
-    res.json({
-      status: 'success',
-      message: 'Schedule updated successfully',
-      data: { schedule },
-    });
-  });
-
-  deleteSchedule = catchAsync(async (req: AuthRequest, res: Response) => {
-    const userId = req.userId!;
-    const { id } = req.params;
-
-    await this.scheduleService.deleteSchedule(userId, id);
-
-    res.json({
-      status: 'success',
-      message: 'Schedule deleted successfully',
+      data: { payouts },
     });
   });
 }

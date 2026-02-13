@@ -29,6 +29,7 @@ model User {
   transactions  Transaction[]
   schedules     Schedule[]
   impulseStats  ImpulseStats[]
+  banks         Bank[]
   
   @@map("users")
   @@index([email])
@@ -87,6 +88,7 @@ model Schedule {
   userId        String    @map("user_id")
   title         String
   amount        Decimal   @db.Decimal(15, 2)
+  payoutAmount  Decimal   @default(0) @map("payout_amount") @db.Decimal(15, 2)
   scheduledDate DateTime  @map("scheduled_date")
   status        String    @default("pending") // pending, completed, cancelled
   recurrence    String?   // once, daily, weekly, monthly
@@ -100,6 +102,26 @@ model Schedule {
   @@map("schedules")
   @@index([userId])
   @@index([scheduledDate])
+}
+
+model Bank {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  bankName      String   @map("bank_name")
+  accountNumber String   @map("account_number")
+  accountName   String   @map("account_name")
+  bankCode      String?  @map("bank_code")
+  
+  isDefault     Boolean  @default(false) @map("is_default")
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("banks")
+  @@index([userId])
 }
 
 model ImpulseStats {
@@ -123,3 +145,4 @@ model ImpulseStats {
   @@index([userId])
   @@index([month])
 }
+

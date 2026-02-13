@@ -11,6 +11,7 @@ yarn.lock
 .env.local
 .env.production
 .env.*.local
+.env.example
 
 # Build output
 dist/

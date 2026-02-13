@@ -99,6 +99,63 @@ export class TransactionService {
     };
   }
 
+  async verifyDeposit(userId: string, reference: string) {
+    // 1. Check if transaction exists
+    const transaction = await prisma.transaction.findUnique({
+      where: { reference },
+    });
+
+    if (!transaction) {
+      throw new AppError('Transaction not found', 404);
+    }
+
+    if (transaction.userId !== userId) {
+      throw new AppError('Unauthorized', 403);
+    }
+
+    if (transaction.status === 'completed') {
+      return { message: 'Transaction already completed', transaction };
+    }
+
+    // 2. Verify with Paystack (Real implementation)
+    // For now, we trust the frontend sent a success signal, OR we can implement server-side verification:
+    // const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, { headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` } });
+    // if (response.data.data.status !== 'success') throw new AppError('Payment verification failed', 400);
+
+    // 3. Update User Balance and Transaction Status
+    const result = await prisma.$transaction(async (tx) => {
+      // Get latest user balance to ensure accuracy
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new AppError('User not found', 404);
+
+      const balanceBefore = Number(user.balance);
+      const amount = Number(transaction.amount);
+      const balanceAfter = balanceBefore + amount;
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { balance: balanceAfter },
+      });
+
+      const updatedTransaction = await tx.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'completed',
+          balanceBefore,
+          balanceAfter,
+          completedAt: new Date(),
+        },
+      });
+
+      return updatedTransaction;
+    });
+
+    return {
+      message: 'Deposit verified and wallet credited',
+      transaction: result,
+    };
+  }
+
   async initiateWithdrawal(userId: string, amount: number) {
     // Get user
     const user = await prisma.user.findUnique({

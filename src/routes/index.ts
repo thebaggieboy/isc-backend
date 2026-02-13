@@ -7,15 +7,18 @@ import lockRoutes from './lock.routes';
 import scheduleRoutes from './schedule.routes';
 import impulseRoutes from './impulse.routes';
 
+import { bankRoutes } from './bank.routes';
+
 const router = express.Router();
 
 // Mount routes
 router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
+router.use('/user', userRoutes);  // ✅ Changed from '/users' to '/user' to match frontend
 router.use('/transactions', transactionRoutes);
 router.use('/locks', lockRoutes);
 router.use('/schedules', scheduleRoutes);
 router.use('/impulse', impulseRoutes);
+router.use('/banks', bankRoutes);
 
 // API Info
 router.get('/', (_req, res) => {
@@ -25,7 +28,7 @@ router.get('/', (_req, res) => {
     status: 'active',
     endpoints: {
       auth: '/auth',
-      users: '/users',
+      user: '/user',  // ✅ Changed from 'users' to 'user'
       transactions: '/transactions',
       locks: '/locks',
       schedules: '/schedules',

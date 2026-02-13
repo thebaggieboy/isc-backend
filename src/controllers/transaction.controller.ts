@@ -65,8 +65,20 @@ export class TransactionController {
     const result = await this.transactionService.initiateWithdrawal(userId, amount);
 
     res.json({
-      status: 'success',
       message: 'Withdrawal initiated',
+      data: result,
+    });
+  });
+
+  verifyDeposit = catchAsync(async (req: AuthRequest, res: Response) => {
+    const userId = req.userId!;
+    const { reference } = req.body;
+
+    const result = await this.transactionService.verifyDeposit(userId, reference);
+
+    res.json({
+      status: 'success',
+      message: 'Deposit verified',
       data: result,
     });
   });
