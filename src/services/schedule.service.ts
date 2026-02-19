@@ -125,6 +125,25 @@ export class ScheduleService {
             executedAt: new Date()
           }
         });
+
+        // ── Auto-generate next recurring schedule ──────────────
+        const recurrence = schedule.recurrence?.toLowerCase();
+        if (recurrence && recurrence !== 'once') {
+          const currentDate = new Date(schedule.scheduledDate);
+          const nextDate = this.calculateNextDate(currentDate, recurrence);
+
+          await tx.schedule.create({
+            data: {
+              userId,
+              title: schedule.title,
+              amount: schedule.amount,
+              payoutAmount: schedule.payoutAmount,
+              scheduledDate: nextDate,
+              recurrence: schedule.recurrence,
+              status: 'locked',
+            } as any,
+          });
+        }
       }
 
       // Update user balance
@@ -158,5 +177,30 @@ export class ScheduleService {
 
       return { success: true };
     });
+  }
+
+  /**
+   * Calculate the next scheduled date based on recurrence frequency.
+   */
+  private calculateNextDate(currentDate: Date, recurrence: string): Date {
+    const next = new Date(currentDate);
+
+    switch (recurrence) {
+      case 'daily':
+        next.setDate(next.getDate() + 1);
+        break;
+      case 'weekly':
+        next.setDate(next.getDate() + 7);
+        break;
+      case 'monthly':
+        next.setMonth(next.getMonth() + 1);
+        break;
+      default:
+        // For any custom interval, default to weekly
+        next.setDate(next.getDate() + 7);
+        break;
+    }
+
+    return next;
   }
 }
