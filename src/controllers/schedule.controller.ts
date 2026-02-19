@@ -51,4 +51,17 @@ export class ScheduleController {
       data: { payouts },
     });
   });
+
+  completePayout = catchAsync(async (req: AuthRequest, res: Response) => {
+    const userId = req.userId!;
+    const { id } = req.params;
+    const { type } = req.body; // 'lock' or 'schedule'
+
+    await this.scheduleService.completePayout(userId, id, type);
+
+    res.json({
+      status: 'success',
+      message: 'Payout completed successfully'
+    });
+  });
 }

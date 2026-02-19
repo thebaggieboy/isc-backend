@@ -37,9 +37,33 @@ export const initializeCronJobs = () => {
         }
       }
 
-      logger.info('✅ Automated unlock job completed');
+      // Find all schedules ready to execute
+      const readySchedules = await prisma.schedule.findMany({
+        where: {
+          status: 'locked',
+          scheduledDate: {
+            lte: now,
+          },
+        },
+      });
+
+      logger.info(`Found ${readySchedules.length} schedules ready to process`);
+
+      const { ScheduleService } = require('../services/schedule.service');
+      const scheduleService = new ScheduleService();
+
+      for (const schedule of readySchedules) {
+        try {
+          await scheduleService.completePayout(schedule.userId, schedule.id, 'schedule');
+          logger.info(`✅ Processed payout for schedule ${schedule.id}`);
+        } catch (error) {
+          logger.error(`❌ Failed to process schedule ${schedule.id}:`, error);
+        }
+      }
+
+      logger.info('✅ Automated unlock and schedule job completed');
     } catch (error) {
-      logger.error('❌ Automated unlock job failed:', error);
+      logger.error('❌ Automated unlock and schedule job failed:', error);
     }
   });
 

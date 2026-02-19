@@ -123,15 +123,12 @@ export class UserService {
       depositCount,
       lockCount,
       transactionCount,
-      impulseStats: impulseStats
-        ? {
-            impulsesStopped: impulseStats.impulsesStopped,
-            currentStreak: impulseStats.currentStreak,
-            longestStreak: impulseStats.longestStreak,
-            totalSaved: impulseStats.totalSaved.toNumber(),
-            savingsGoal: impulseStats.savingsGoal?.toNumber(),
-          }
-        : null,
+      // Flatten Impulse Stats for frontend compatibility
+      savedThisMonth: impulseStats?.totalSaved.toNumber() || 0,
+      impulsesStopped: impulseStats?.impulsesStopped || 0,
+      currentStreak: impulseStats?.currentStreak || 0,
+      savingsGoal: impulseStats?.savingsGoal?.toNumber() || 0, // Default 0 if no goal or no stats
+      longestStreak: impulseStats?.longestStreak || 0,
     };
   }
 }

@@ -11,5 +11,6 @@ router.use(authenticate);
 router.post('/', scheduleController.createSchedule);
 router.get('/', scheduleController.getSchedules);
 router.get('/payouts', scheduleController.getPayouts);
+router.post('/:id/complete', scheduleController.completePayout);
 
 export default router;

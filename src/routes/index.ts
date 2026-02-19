@@ -6,6 +6,7 @@ import transactionRoutes from './transaction.routes';
 import lockRoutes from './lock.routes';
 import scheduleRoutes from './schedule.routes';
 import impulseRoutes from './impulse.routes';
+import kycRoutes from './kyc.routes';
 
 import { bankRoutes } from './bank.routes';
 
@@ -19,6 +20,7 @@ router.use('/locks', lockRoutes);
 router.use('/schedules', scheduleRoutes);
 router.use('/impulse', impulseRoutes);
 router.use('/banks', bankRoutes);
+router.use('/kyc', kycRoutes);
 
 // API Info
 router.get('/', (_req, res) => {
