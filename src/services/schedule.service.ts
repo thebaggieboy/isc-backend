@@ -1,6 +1,5 @@
 // src/services/schedule.service.ts
 import { PrismaClient } from '@prisma/client';
-// import { AppError } from '../utils/AppError'; // Unused
 
 const prisma = new PrismaClient();
 
@@ -93,7 +92,6 @@ export class ScheduleService {
       id: schedule.id,
       amount: schedule.payoutAmount.toNumber(),
       lockDate: schedule.scheduledDate, // Or execution date
-      lockDate: schedule.scheduledDate, // Or execution date
       unlockDate: schedule.scheduledDate, // Immediate payout?
       status: schedule.status, // Pass through status ('locked', 'pending', 'completed')
       interval: schedule.recurrence || 'Once', // Use recurrence for interval backward compat
@@ -114,6 +112,10 @@ export class ScheduleService {
     return await prisma.$transaction(async (tx) => {
       let amount = 0;
       let payoutAmount = 0;
+      let isWithdrawal = false;
+      let bankDetails = "";
+      let title = "";
+      let scheduleId = "";
 
       if (type === 'lock') {
         const lock = await tx.lockPeriod.findUnique({
@@ -125,7 +127,8 @@ export class ScheduleService {
         }
 
         amount = lock.amount.toNumber();
-        payoutAmount = amount; // For locks, payout is usually the whole amount
+        payoutAmount = amount;
+        title = lock.description || 'Lock Period';
 
         await tx.lockPeriod.update({
           where: { id },
@@ -145,6 +148,8 @@ export class ScheduleService {
 
         amount = schedule.amount.toNumber();
         payoutAmount = schedule.payoutAmount.toNumber();
+        title = schedule.title;
+        scheduleId = schedule.id;
 
         await tx.schedule.update({
           where: { id },
@@ -183,98 +188,93 @@ export class ScheduleService {
                 scheduledDate: nextDate,
                 recurrence: schedule.recurrence, // Keep original recurrence string
                 status: 'locked',
+                autoPayout: schedule.autoPayout,
               } as any,
             });
           }
         }
 
+        // ── Auto Payout Check ──────────
+        if (schedule.autoPayout) {
+          const defaultBank = await tx.bank.findFirst({
+            where: { userId, isDefault: true }
+          });
+
+          if (defaultBank) {
+            isWithdrawal = true;
+            bankDetails = `${defaultBank.bankName} - ${defaultBank.accountNumber}`;
+          } else {
+            console.log(`AutoPayout requested for schedule ${id} but no default bank found. Unlocking to wallet.`);
+          }
+        }
+      }
+
+      // Update user balance
+      const userUpdateData: any = {
+        totalLocked: { decrement: amount }
+      };
+
+      // If NOT withdrawal (auto-payout to bank), add to available balance (Unlock)
+      if (!isWithdrawal) {
+        userUpdateData.balance = { increment: payoutAmount };
+      }
+
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: userUpdateData,
+        select: { balance: true }
       });
 
-    // Check for Default Bank if Auto Payout is requested
-    let isWithdrawal = false;
-    let bankDetails = "";
+      const balanceAfter = updatedUser.balance.toNumber();
+      let balanceBefore = balanceAfter;
 
-    if (schedule.autoPayout) {
-      const defaultBank = await tx.bank.findFirst({
-        where: { userId, isDefault: true }
+      if (!isWithdrawal) {
+        balanceBefore = balanceAfter - payoutAmount;
+      }
+
+      // Create transaction record
+      await tx.transaction.create({
+        data: {
+          userId,
+          type: isWithdrawal ? 'withdrawal' : (type === 'lock' ? 'unlock' : 'payout'),
+          amount: payoutAmount,
+          balanceBefore,
+          balanceAfter,
+          status: 'completed',
+          description: isWithdrawal
+            ? `Auto Payout to ${bankDetails} - ${title}`
+            : `Payout completed for ${type}${type === 'schedule' ? '' : ' lock'}`,
+          completedAt: new Date(),
+          metadata: isWithdrawal ? { bankDetails, scheduleId } : { scheduleId }
+        }
       });
 
-      if (defaultBank) {
-        isWithdrawal = true;
-        bankDetails = `${defaultBank.bankName} - ${defaultBank.accountNumber}`;
-      } else {
-        // Fallback to wallet unlock if no default bank
-        // We could throw an error, but unlocking is safer for user funds
-        console.log(`AutoPayout requested for schedule ${id} but no default bank found. Unlocking to wallet.`);
-      }
-    }
-
-    // Update user balance
-    const userUpdateData: any = {
-      totalLocked: { decrement: amount }
-    };
-
-    // If NOT withdrawal (auto-payout to bank), add to available balance (Unlock)
-    if (!isWithdrawal) {
-      userUpdateData.balance = { increment: payoutAmount };
-    }
-
-    const updatedUser = await tx.user.update({
-      where: { id: userId },
-      data: userUpdateData,
-      select: { balance: true }
+      return { success: true };
     });
-
-    const balanceAfter = updatedUser.balance.toNumber();
-    let balanceBefore = balanceAfter;
-
-    if (!isWithdrawal) {
-      balanceBefore = balanceAfter - payoutAmount;
-    }
-
-    // Create transaction record
-    await tx.transaction.create({
-      data: {
-        userId,
-        type: isWithdrawal ? 'withdrawal' : (type === 'lock' ? 'unlock' : 'payout'),
-        amount: payoutAmount,
-        balanceBefore,
-        balanceAfter,
-        status: 'completed',
-        description: isWithdrawal
-          ? `Auto Payout to ${bankDetails} - ${schedule.title}`
-          : `Payout completed for ${type}${type === 'schedule' ? '' : ' lock'}`,
-        completedAt: new Date(),
-        metadata: isWithdrawal ? { bankDetails, scheduleId: schedule.id } : { scheduleId: schedule.id }
-      }
-    });
-
-    return { success: true };
-  });
-}
+  }
 
   /**
    * Calculate the next scheduled date based on recurrence frequency.
    */
   private calculateNextDate(currentDate: Date, recurrence: string): Date {
-  const next = new Date(currentDate);
+    const next = new Date(currentDate);
 
-  switch (recurrence) {
-    case 'daily':
-      next.setDate(next.getDate() + 1);
-      break;
-    case 'weekly':
-      next.setDate(next.getDate() + 7);
-      break;
-    case 'monthly':
-      next.setMonth(next.getMonth() + 1);
-      break;
-    default:
-      // For any custom interval, default to weekly
-      next.setDate(next.getDate() + 7);
-      break;
+    switch (recurrence) {
+      case 'daily':
+        next.setDate(next.getDate() + 1);
+        break;
+      case 'weekly':
+        next.setDate(next.getDate() + 7);
+        break;
+      case 'monthly':
+        next.setMonth(next.getMonth() + 1);
+        break;
+      default:
+        // For any custom interval, default to weekly
+        next.setDate(next.getDate() + 7);
+        break;
+    }
+
+    return next;
   }
-
-  return next;
-}
 }

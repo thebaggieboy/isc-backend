@@ -9,7 +9,7 @@ export class WebhookController {
      * Trigger the Auto Payout simulation manually.
      * POST /webhooks/simulate-payouts
      */
-    simulatePayouts = catchAsync(async (req: Request, res: Response) => {
+    simulatePayouts = catchAsync(async (_req: Request, res: Response) => {
         const results = await payoutJob.processDuePayouts();
 
         res.json({
