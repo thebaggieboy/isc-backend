@@ -10,6 +10,7 @@ export class ScheduleService {
     amount: number;
     payoutAmount: number;
     scheduledDate: Date;
+    endDate?: Date;
     recurrence?: string;
   }) {
     return await prisma.schedule.create({
@@ -17,8 +18,9 @@ export class ScheduleService {
         userId,
         title: data.title,
         amount: data.amount,
-        payoutAmount: data.payoutAmount, // Ensure schema has this field
+        payoutAmount: data.payoutAmount,
         scheduledDate: data.scheduledDate,
+        endDate: data.endDate,
         recurrence: data.recurrence || 'once',
         status: 'locked',
       } as any, // Cast to any to bypass type check if schema is outdated in current context
@@ -66,7 +68,9 @@ export class ScheduleService {
       id: schedule.id,
       amount: schedule.payoutAmount.toNumber(),
       lockDate: schedule.scheduledDate, // Or execution date
-      unlockDate: schedule.scheduledDate, // Immediate payout?
+      lockDate: schedule.scheduledDate, // Or execution date
+      unlockDate: schedule.scheduledDate, // Immediate payout for specific instance
+      endDate: schedule.endDate, // Recurrence end date
       status: schedule.status, // Pass through status ('locked', 'pending', 'completed')
       interval: schedule.recurrence || 'Once', // Use recurrence for interval backward compat
       recurrence: schedule.recurrence || 'Once',
@@ -132,51 +136,56 @@ export class ScheduleService {
           const currentDate = new Date(schedule.scheduledDate);
           const nextDate = this.calculateNextDate(currentDate, recurrence);
 
-          await tx.schedule.create({
-            data: {
-              userId,
-              title: schedule.title,
-              amount: schedule.amount,
-              payoutAmount: schedule.payoutAmount,
-              scheduledDate: nextDate,
-              recurrence: schedule.recurrence,
-              status: 'locked',
-            } as any,
-          });
+          // Check if nextDate is beyond endDate
+          if (schedule.endDate && nextDate > new Date(schedule.endDate)) {
+            // Stop recurrence
+          } else {
+            await tx.schedule.create({
+              data: {
+                userId,
+                title: schedule.title,
+                amount: schedule.amount,
+                payoutAmount: schedule.payoutAmount,
+                scheduledDate: nextDate,
+                endDate: schedule.endDate,
+                recurrence: schedule.recurrence,
+                status: 'locked',
+              } as any,
+            });
+          }
         }
-      }
 
-      // Update user balance
-      // We add the payoutAmount to the accessible balance
-      const updatedUser = await tx.user.update({
-        where: { id: userId },
-        data: {
-          balance: { increment: payoutAmount },
-          // If the amount was in totalLocked, we should decrement it
-          totalLocked: { decrement: amount }
-        },
-        select: { balance: true }
+        // Update user balance
+        // We add the payoutAmount to the accessible balance
+        const updatedUser = await tx.user.update({
+          where: { id: userId },
+          data: {
+            balance: { increment: payoutAmount },
+            // If the amount was in totalLocked, we should decrement it
+            totalLocked: { decrement: amount }
+          },
+          select: { balance: true }
+        });
+
+        const balanceAfter = updatedUser.balance.toNumber();
+        const balanceBefore = balanceAfter - payoutAmount;
+
+        // Create transaction record
+        await tx.transaction.create({
+          data: {
+            userId,
+            type: type === 'lock' ? 'unlock' : 'payout',
+            amount: payoutAmount,
+            balanceBefore,
+            balanceAfter,
+            status: 'completed',
+            description: `Payout completed for ${type}${type === 'schedule' ? '' : ' lock'}`,
+            completedAt: new Date()
+          }
+        });
+
+        return { success: true };
       });
-
-      const balanceAfter = updatedUser.balance.toNumber();
-      const balanceBefore = balanceAfter - payoutAmount;
-
-      // Create transaction record
-      await tx.transaction.create({
-        data: {
-          userId,
-          type: type === 'lock' ? 'unlock' : 'payout',
-          amount: payoutAmount,
-          balanceBefore,
-          balanceAfter,
-          status: 'completed',
-          description: `Payout completed for ${type}${type === 'schedule' ? '' : ' lock'}`,
-          completedAt: new Date()
-        }
-      });
-
-      return { success: true };
-    });
   }
 
   /**
