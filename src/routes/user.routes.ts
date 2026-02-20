@@ -31,4 +31,12 @@ router.get('/balance', userController.getBalance);
 // Get stats
 router.get('/stats', userController.getStats);
 
+// Update push token
+router.patch('/push-token', userController.updatePushToken);
+
+// Simulation Webhook (Dev only ideally, but exposing for demo)
+import { WebhookController } from '../controllers/webhook.controller';
+const webhookController = new WebhookController();
+router.post('/webhooks/simulate-payouts', webhookController.simulatePayouts);
+
 export default router;

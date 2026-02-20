@@ -59,4 +59,20 @@ export class UserController {
       data: stats,
     });
   });
+  updatePushToken = catchAsync(async (req: AuthRequest, res: Response) => {
+    const userId = req.userId!;
+    const { token } = req.body;
+
+    if (!token) {
+      res.status(400).json({ status: 'fail', message: 'Token is required' });
+      return;
+    }
+
+    await this.userService.updatePushToken(userId, token);
+
+    res.json({
+      status: 'success',
+      message: 'Push token updated successfully',
+    });
+  });
 }

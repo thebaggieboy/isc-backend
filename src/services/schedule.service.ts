@@ -11,8 +11,9 @@ export class ScheduleService {
     payoutAmount: number;
     scheduledDate: Date;
     recurrence?: string;
+    autoPayout?: boolean;
   }) {
-    return await prisma.schedule.create({
+    const schedule = await prisma.schedule.create({
       data: {
         userId,
         title: data.title,
@@ -21,8 +22,34 @@ export class ScheduleService {
         scheduledDate: data.scheduledDate,
         recurrence: data.recurrence || 'once',
         status: 'locked',
-      } as any, // Cast to any to bypass type check if schema is outdated in current context
+        autoPayout: data.autoPayout || false,
+      } as any,
     });
+
+    // Update User Total Locked and Impulse Stats
+    const currentMonth = new Date();
+    currentMonth.setDate(1);
+    currentMonth.setHours(0, 0, 0, 0);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { totalLocked: { increment: data.amount } }
+      }),
+      prisma.impulseStats.upsert({
+        where: { userId_month: { userId, month: currentMonth } },
+        create: {
+          userId,
+          month: currentMonth,
+          totalSaved: data.amount,
+        },
+        update: {
+          totalSaved: { increment: data.amount }
+        }
+      })
+    ]);
+
+    return schedule;
   }
 
   async getUserSchedules(userId: string) {
@@ -162,30 +189,41 @@ export class ScheduleService {
         }
 
         // Update user balance
-        // We add the payoutAmount to the accessible balance
+        const userUpdateData: any = {
+          totalLocked: { decrement: amount }
+        };
+
+        // If NOT auto-payout, add to available balance (Unlock)
+        // If IS auto-payout, it leaves the system (Withdrawal), so we don't increment balance
+        if (!schedule.autoPayout) {
+          userUpdateData.balance = { increment: payoutAmount };
+        }
+
         const updatedUser = await tx.user.update({
           where: { id: userId },
-          data: {
-            balance: { increment: payoutAmount },
-            // If the amount was in totalLocked, we should decrement it
-            totalLocked: { decrement: amount }
-          },
+          data: userUpdateData,
           select: { balance: true }
         });
 
         const balanceAfter = updatedUser.balance.toNumber();
-        const balanceBefore = balanceAfter - payoutAmount;
+        let balanceBefore = balanceAfter;
+
+        if (!schedule.autoPayout) {
+          balanceBefore = balanceAfter - payoutAmount;
+        }
 
         // Create transaction record
         await tx.transaction.create({
           data: {
             userId,
-            type: type === 'lock' ? 'unlock' : 'payout',
+            type: schedule.autoPayout ? 'withdrawal' : (type === 'lock' ? 'unlock' : 'payout'),
             amount: payoutAmount,
             balanceBefore,
             balanceAfter,
             status: 'completed',
-            description: `Payout completed for ${type}${type === 'schedule' ? '' : ' lock'}`,
+            description: schedule.autoPayout
+              ? `Auto Payout to Default Bank - ${schedule.title}`
+              : `Payout completed for ${type}${type === 'schedule' ? '' : ' lock'}`,
             completedAt: new Date()
           }
         });

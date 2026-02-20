@@ -23,6 +23,7 @@ model User {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   lastLogin     DateTime? @map("last_login")
+  pushToken     String?   @map("push_token")
   
   // Relations
   lockPeriods   LockPeriod[]
@@ -92,6 +93,7 @@ model Schedule {
   scheduledDate DateTime  @map("scheduled_date")
   status        String    @default("pending") // pending, completed, cancelled
   recurrence    String?   // once, daily, weekly, monthly
+  autoPayout    Boolean   @default(false) @map("auto_payout")
   
   createdAt     DateTime  @default(now()) @map("created_at")
   executedAt    DateTime? @map("executed_at")

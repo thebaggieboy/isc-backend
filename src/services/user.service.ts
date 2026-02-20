@@ -65,7 +65,7 @@ export class UserService {
     return {
       balance: user.balance.toNumber(),
       totalLocked: user.totalLocked.toNumber(),
-      available: user.balance.toNumber(),
+      available: user.balance.toNumber() - user.totalLocked.toNumber(),
     };
   }
 
@@ -130,5 +130,12 @@ export class UserService {
       savingsGoal: impulseStats?.savingsGoal?.toNumber() || 0, // Default 0 if no goal or no stats
       longestStreak: impulseStats?.longestStreak || 0,
     };
+  }
+
+  async updatePushToken(userId: string, token: string) {
+    return await prisma.user.update({
+      where: { id: userId },
+      data: { pushToken: token },
+    });
   }
 }
