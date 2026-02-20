@@ -90,7 +90,6 @@ model Schedule {
   amount        Decimal   @db.Decimal(15, 2)
   payoutAmount  Decimal   @default(0) @map("payout_amount") @db.Decimal(15, 2)
   scheduledDate DateTime  @map("scheduled_date")
-  endDate       DateTime? @map("end_date")
   status        String    @default("pending") // pending, completed, cancelled
   recurrence    String?   // once, daily, weekly, monthly
   

@@ -10,7 +10,6 @@ export class ScheduleService {
     amount: number;
     payoutAmount: number;
     scheduledDate: Date;
-    endDate?: Date;
     recurrence?: string;
   }) {
     return await prisma.schedule.create({
@@ -20,7 +19,6 @@ export class ScheduleService {
         amount: data.amount,
         payoutAmount: data.payoutAmount,
         scheduledDate: data.scheduledDate,
-        endDate: data.endDate,
         recurrence: data.recurrence || 'once',
         status: 'locked',
       } as any, // Cast to any to bypass type check if schema is outdated in current context
@@ -69,8 +67,7 @@ export class ScheduleService {
       amount: schedule.payoutAmount.toNumber(),
       lockDate: schedule.scheduledDate, // Or execution date
       lockDate: schedule.scheduledDate, // Or execution date
-      unlockDate: schedule.scheduledDate, // Immediate payout for specific instance
-      endDate: schedule.endDate, // Recurrence end date
+      unlockDate: schedule.scheduledDate, // Immediate payout?
       status: schedule.status, // Pass through status ('locked', 'pending', 'completed')
       interval: schedule.recurrence || 'Once', // Use recurrence for interval backward compat
       recurrence: schedule.recurrence || 'Once',
@@ -131,13 +128,23 @@ export class ScheduleService {
         });
 
         // ── Auto-generate next recurring schedule ──────────────
-        const recurrence = schedule.recurrence?.toLowerCase();
-        if (recurrence && recurrence !== 'once') {
-          const currentDate = new Date(schedule.scheduledDate);
-          const nextDate = this.calculateNextDate(currentDate, recurrence);
+        const recurrenceRaw = schedule.recurrence?.toLowerCase() || '';
+        const [freqStr, ...params] = recurrenceRaw.split(';');
+        const freq = freqStr.trim();
 
-          // Check if nextDate is beyond endDate
-          if (schedule.endDate && nextDate > new Date(schedule.endDate)) {
+        // Parse params for until date
+        let untilDate: Date | null = null;
+        const untilParam = params.find(p => p.startsWith('until='));
+        if (untilParam) {
+          untilDate = new Date(untilParam.split('=')[1]);
+        }
+
+        if (freq && freq !== 'once') {
+          const currentDate = new Date(schedule.scheduledDate);
+          const nextDate = this.calculateNextDate(currentDate, freq);
+
+          // Check if nextDate is beyond untilDate
+          if (untilDate && nextDate > untilDate) {
             // Stop recurrence
           } else {
             await tx.schedule.create({
@@ -147,8 +154,7 @@ export class ScheduleService {
                 amount: schedule.amount,
                 payoutAmount: schedule.payoutAmount,
                 scheduledDate: nextDate,
-                endDate: schedule.endDate,
-                recurrence: schedule.recurrence,
+                recurrence: schedule.recurrence, // Keep original recurrence string
                 status: 'locked',
               } as any,
             });
